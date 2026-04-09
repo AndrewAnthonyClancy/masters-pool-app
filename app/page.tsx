@@ -2,6 +2,45 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+type Player = {
+  name: string;
+  score: number;
+  thru: string;
+  pos: string;
+  status?: string;
+  country?: string;
+  amateur?: boolean;
+};
+
+type PoolEntry = {
+  contestant: string;
+  picks: string[];
+};
+
+type PickDetail = {
+  pick: string;
+  golfer?: Player;
+  value: number | null;
+  label: string;
+  reason: string;
+  penalty: boolean;
+};
+
+type ScoredPick = PickDetail & { golfer: Player; value: number };
+
+type RankedEntry = PoolEntry & {
+  total: number;
+  scoredPicks: ScoredPick[];
+  missingPicks: string[];
+  madeCutCount: number;
+  activeHoles: string;
+  countedPicks: ScoredPick[];
+  droppedPicks: ScoredPick[];
+  penaltyCount: number;
+  pickDetails: PickDetail[];
+  place: number;
+};
+
 const MOCK_LEADERBOARD = [
   { name: "Scottie Scheffler", score: -4, thru: "12", pos: "T3" },
   { name: "Rory McIlroy", score: -2, thru: "10", pos: "T9" },
@@ -38,7 +77,7 @@ const MOCK_LEADERBOARD = [
   { name: "Nick Taylor", score: 1, thru: "11", pos: "T24" },
 ];
 
-const POOL_ENTRIES = [
+const POOL_ENTRIES: PoolEntry[] = [
   { contestant: "Babyn, J & Lee, Rob", picks: ["Scottie Scheffler", "Rory McIlroy", "Jordan Spieth", "Jake Knapp", "Corey Conners", "Michael Kim", "Alex Noren", "Nick Taylor"] },
   { contestant: "Badders, Nolan", picks: ["Rory McIlroy", "Ludvig Aberg", "Xander Schauffele", "Justin Thomas", "Tyrrell Hatton", "Ben Griffin", "Aldrich Potgieter", "Andrew Novak"] },
   { contestant: "Bates, Dan", picks: ["Scottie Scheffler", "Rory McIlroy", "Tommy Fleetwood", "Jacob Bridgeman", "Corey Conners", "Alex Noren", "Michael Kim", "Sam Stevens"] },
@@ -56,39 +95,39 @@ const POOL_ENTRIES = [
   { contestant: "Woods, Randy", picks: ["Scottie Scheffler", "Bryson DeChambeau", "Ludvig Aberg", "Cameron Smith", "Gary Woodland", "Rasmus Hojgaard", "Wyndham Clark", "Nick Taylor"] },
 ];
 
-function formatScore(score) {
+function formatScore(score: number) {
   if (score === 0) return "E";
   return score > 0 ? `+${score}` : `${score}`;
 }
 
-function getScoreColor(score) {
+function getScoreColor(score: number) {
   if (score < 0) return "#166534";
   if (score > 0) return "#b91c1c";
   return "#374151";
 }
 
-function getThruLabel(thru) {
+function getThruLabel(thru: string) {
   if (!thru || thru === "-") return "Not started";
   if (String(thru).includes(":")) return `Tee ${thru}`;
   if (thru === "F") return "Finished";
   return "In progress";
 }
 
-function getHoleLabel(thru) {
+function getHoleLabel(thru: string) {
   if (!thru || thru === "-") return "-";
   if (String(thru).includes(":")) return "Tee time";
   if (thru === "F") return "18";
   return String(thru);
 }
 
-function comparePlayers(a, b) {
+function comparePlayers(a: Player, b: Player) {
   const scoreA = typeof a.score === "number" ? a.score : 999;
   const scoreB = typeof b.score === "number" ? b.score : 999;
   if (scoreA !== scoreB) return scoreA - scoreB;
   return a.name.localeCompare(b.name);
 }
 
-function getPoolScoreInfo(golfer) {
+function getPoolScoreInfo(golfer?: Player) {
   if (!golfer) {
     return { value: null, label: "Missing", reason: "Not returned by API", penalty: false };
   }
@@ -113,7 +152,7 @@ function getPoolScoreInfo(golfer) {
   };
 }
 
-function normalizeName(name) {
+function normalizeName(name: string = "") {
   return String(name || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -124,14 +163,14 @@ function normalizeName(name) {
 }
 
 export default function Page() {
-  const [players, setPlayers] = useState(MOCK_LEADERBOARD);
+  const [players, setPlayers] = useState<Player[]>(MOCK_LEADERBOARD);
   const [useMock, setUseMock] = useState(true);
   const [updatedAt, setUpdatedAt] = useState(new Date());
   const [loading, setLoading] = useState(false);
-  const [lastPlayers, setLastPlayers] = useState([]);
+  const [lastPlayers, setLastPlayers] = useState<Player[]>([]);
   const [secondsLeft, setSecondsLeft] = useState(30);
   const [selectedContestant, setSelectedContestant] = useState("Clancy, Sarah");
-  const [lastPoolLeaderboard, setLastPoolLeaderboard] = useState([]);
+  const [lastPoolLeaderboard, setLastPoolLeaderboard] = useState<RankedEntry[]>([]);
 
   async function load() {
     setLastPoolLeaderboard(poolLeaderboard);
@@ -153,8 +192,8 @@ export default function Page() {
       console.log("API failed, using mock");
     }
 
-    setPlayers((p) =>
-      p.map((pl) => ({
+    setPlayers((p: Player[]) =>
+      p.map((pl: Player) => ({
         ...pl,
         score: pl.score + (Math.random() > 0.9 ? 1 : Math.random() > 0.9 ? -1 : 0),
       }))
@@ -178,8 +217,8 @@ export default function Page() {
   const sortedPlayers = useMemo(() => [...players].sort(comparePlayers), [players]);
   const leader = sortedPlayers[0];
 
-  function getMovement(player) {
-    const prev = lastPlayers.find((p) => p.name === player.name);
+  function getMovement(player: Player) {
+    const prev = lastPlayers.find((p: Player) => p.name === player.name);
     if (!prev) return "";
     if (player.score < prev.score) return "↑";
     if (player.score > prev.score) return "↓";
@@ -187,16 +226,16 @@ export default function Page() {
   }
 
   const golferMap = useMemo(() => {
-    const map = new Map();
-    sortedPlayers.forEach((player) => {
+    const map = new Map<string, Player>();
+    sortedPlayers.forEach((player: Player) => {
       map.set(normalizeName(player.name), player);
     });
     return map;
   }, [sortedPlayers]);
 
   const poolLeaderboard = useMemo(() => {
-    return POOL_ENTRIES.map((entry) => {
-      const pickDetails = entry.picks.map((pick) => {
+    return POOL_ENTRIES.map((entry: PoolEntry) => {
+      const pickDetails = entry.picks.map((pick: string) => {
         const golfer = golferMap.get(normalizeName(pick));
         const scoreInfo = getPoolScoreInfo(golfer);
         return {
@@ -206,18 +245,18 @@ export default function Page() {
         };
       });
 
-      const scoredPicks = pickDetails.filter((item) => item.golfer);
-      const missingPicks = pickDetails.filter((item) => !item.golfer).map((item) => item.pick);
-      const sortableScored = scoredPicks.filter((item) => item.value !== null);
-      const sortedByPoolScore = [...sortableScored].sort((a, b) => a.value - b.value);
+      const scoredPicks = pickDetails.filter((item): item is ScoredPick => Boolean(item.golfer) && item.value !== null);
+      const missingPicks = pickDetails.filter((item: PickDetail) => !item.golfer).map((item: PickDetail) => item.pick);
+      const sortableScored = scoredPicks;
+      const sortedByPoolScore = [...sortableScored].sort((a: ScoredPick, b: ScoredPick) => a.value - b.value);
       const countedPicks = sortedByPoolScore.slice(0, 6);
       const droppedPicks = sortedByPoolScore.slice(6);
-      const total = countedPicks.reduce((sum, item) => sum + item.value, 0);
+      const total = countedPicks.reduce((sum: number, item: ScoredPick) => sum + item.value, 0);
       const activeHoles = scoredPicks
-        .map((item) => `${item.pick.split(" ").slice(-1)[0]} ${getHoleLabel(item.golfer.thru)}`)
+        .map((item: ScoredPick) => `${item.pick.split(" ").slice(-1)[0]} ${getHoleLabel(item.golfer.thru)}`)
         .join(", ");
-      const madeCutCount = scoredPicks.filter((item) => item.golfer.pos && item.golfer.pos !== "-").length;
-      const penaltyCount = scoredPicks.filter((item) => item.penalty).length;
+      const madeCutCount = scoredPicks.filter((item: ScoredPick) => item.golfer.pos && item.golfer.pos !== "-").length;
+      const penaltyCount = scoredPicks.filter((item: ScoredPick) => item.penalty).length;
 
       return {
         ...entry,
@@ -231,17 +270,17 @@ export default function Page() {
         penaltyCount,
         pickDetails,
       };
-    }).sort((a, b) => {
+    }).sort((a: Omit<RankedEntry, "place">, b: Omit<RankedEntry, "place">) => {
       if (a.total !== b.total) return a.total - b.total;
       if (a.missingPicks.length !== b.missingPicks.length) return a.missingPicks.length - b.missingPicks.length;
       return a.contestant.localeCompare(b.contestant);
-    }).map((entry, index) => ({ ...entry, place: index + 1 }));
+    }).map((entry: Omit<RankedEntry, "place">, index: number) => ({ ...entry, place: index + 1 }));
   }, [golferMap]);
 
-  const selectedEntry = poolLeaderboard.find((entry) => entry.contestant === selectedContestant) || poolLeaderboard[0];
+  const selectedEntry = poolLeaderboard.find((entry: RankedEntry) => entry.contestant === selectedContestant) || poolLeaderboard[0];
 
-  function getStandingMovement(entry) {
-    const prev = lastPoolLeaderboard.find((p) => p.contestant === entry.contestant);
+  function getStandingMovement(entry: RankedEntry) {
+    const prev = lastPoolLeaderboard.find((p: RankedEntry) => p.contestant === entry.contestant);
     if (!prev) return "";
     if (entry.place < prev.place) return "↑";
     if (entry.place > prev.place) return "↓";
@@ -249,8 +288,8 @@ export default function Page() {
   }
 
   const uniqueGolfersTracked = useMemo(() => {
-    const allPicks = new Set();
-    POOL_ENTRIES.forEach((entry) => entry.picks.forEach((pick) => allPicks.add(normalizeName(pick))));
+    const allPicks = new Set<string>();
+    POOL_ENTRIES.forEach((entry: PoolEntry) => entry.picks.forEach((pick: string) => allPicks.add(normalizeName(pick))));
     return allPicks.size;
   }, []);
 
