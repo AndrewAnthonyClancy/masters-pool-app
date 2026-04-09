@@ -164,7 +164,7 @@ function normalizeName(name: string = "") {
 
 export default function Page() {
   const [players, setPlayers] = useState<Player[]>(MOCK_LEADERBOARD);
-  const [useMock, setUseMock] = useState(true);
+  const [useMock, setUseMock] = useState(false);
   const [updatedAt, setUpdatedAt] = useState(new Date());
   const [loading, setLoading] = useState(false);
   const [lastPlayers, setLastPlayers] = useState<Player[]>([]);
@@ -366,15 +366,7 @@ export default function Page() {
                 {poolLeaderboard[0] ? `${poolLeaderboard[0].contestant} • ${formatScore(poolLeaderboard[0].total)}` : "-"}
               </div>
             </div>
-            <div style={{ background: "#fff7ed", borderRadius: 18, padding: 16, border: "1px solid #fed7aa", gridColumn: "1 / -1" }}>
-              <div style={{ fontSize: 12, color: "#9a3412", fontWeight: 700, textTransform: "uppercase" }}>Coverage Check</div>
-              <div style={{ marginTop: 8, fontSize: 16, fontWeight: 700, color: "#7c2d12" }}>
-                Returned golfers: {golfersReturned} of {uniqueGolfersTracked} unique pool picks.
-              </div>
-              <div style={{ marginTop: 6, fontSize: 13, color: "#9a3412" }}>
-                For fully accurate pool totals, your API should return the entire leaderboard, not just one person's tracked golfers.
-              </div>
-            </div>
+          </div>
           </div>
         </div>
 
