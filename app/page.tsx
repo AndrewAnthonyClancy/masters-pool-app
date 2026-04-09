@@ -181,7 +181,7 @@ export default function Page() {
       if (!useMock) {
         const res = await fetch("/api/masters", { cache: "no-store" });
         const data = await res.json();
-        if (data.players) {
+        if (Array.isArray(data.players) && data.players.length > 0) {
           setPlayers(data.players);
           setUpdatedAt(new Date());
           setLoading(false);
@@ -300,7 +300,7 @@ export default function Page() {
       style={{
         minHeight: "100vh",
         background: "linear-gradient(180deg, #f6f7f2 0%, #eef3ea 100%)",
-        padding: "32px 20px",
+        padding: "16px 12px",
         fontFamily: "Arial, sans-serif",
         color: "#111827",
       }}
@@ -310,7 +310,7 @@ export default function Page() {
           style={{
             background: "#ffffff",
             borderRadius: 24,
-            padding: 24,
+            padding: 18,
             boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
             border: "1px solid #e5e7eb",
             marginBottom: 20,
@@ -321,7 +321,7 @@ export default function Page() {
               <div style={{ display: "inline-block", background: "#e8f2e8", color: "#166534", padding: "6px 10px", borderRadius: 999, fontSize: 12, fontWeight: 700, marginBottom: 12, letterSpacing: 0.3 }}>
                 MASTERS POOL TOOL
               </div>
-              <h1 style={{ margin: 0, fontSize: 36, lineHeight: 1.1 }}>Live Pool Leaderboard</h1>
+              <h1 style={{ margin: 0, fontSize: "clamp(28px, 7vw, 36px)", lineHeight: 1.1 }}>Live Pool Leaderboard</h1>
               <p style={{ margin: "10px 0 0", color: "#4b5563", fontSize: 16 }}>
                 Track the full pool, see who is leading, and drill into each contestant's golfers.
               </p>
@@ -346,7 +346,7 @@ export default function Page() {
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 14, marginTop: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginTop: 20 }}>
             <div style={{ background: "#f9fafb", borderRadius: 18, padding: 16, border: "1px solid #e5e7eb" }}>
               <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 700, textTransform: "uppercase" }}>Mode</div>
               <div style={{ marginTop: 8, fontSize: 22, fontWeight: 800 }}>{useMock ? "Mock" : "Live"}</div>
@@ -369,7 +369,7 @@ export default function Page() {
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 20, alignItems: "start" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 16, alignItems: "start" }}>
           <div style={{ background: "#ffffff", borderRadius: 24, boxShadow: "0 10px 30px rgba(0,0,0,0.08)", border: "1px solid #e5e7eb", overflow: "hidden" }}>
             <div style={{ padding: "18px 22px", borderBottom: "1px solid #e5e7eb", fontWeight: 800, fontSize: 20 }}>
               Pool Standings
@@ -390,9 +390,9 @@ export default function Page() {
                       onClick={() => setSelectedContestant(entry.contestant)}
                       style={{ borderTop: "1px solid #f3f4f6", cursor: "pointer", background: selectedContestant === entry.contestant ? "#f0fdf4" : "white" }}
                     >
-                      <td style={{ padding: "18px 22px", fontWeight: 800 }}>{entry.place} {getStandingMovement(entry)}</td>
-                      <td style={{ padding: "18px 10px", fontWeight: 700 }}>{entry.contestant}</td>
-                      <td style={{ padding: "18px 10px", fontSize: 22, fontWeight: 800, color: getScoreColor(entry.total) }}>{formatScore(entry.total)}</td>
+                      <td style={{ padding: "14px 14px", fontWeight: 800 }}>{entry.place} {getStandingMovement(entry)}</td>
+                      <td style={{ padding: "14px 10px", fontWeight: 700 }}>{entry.contestant}</td>
+                      <td style={{ padding: "14px 10px", fontSize: 20, fontWeight: 800, color: getScoreColor(entry.total) }}>{formatScore(entry.total)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -423,61 +423,59 @@ export default function Page() {
                     </span>
                   </div>
 
-                  <div style={{ marginTop: 18, overflowX: "auto" }}>
-                    <table width="100%" style={{ borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr style={{ background: "#f9fafb", color: "#6b7280", textTransform: "uppercase", fontSize: 12 }}>
-                          <th align="left" style={{ padding: "12px 14px" }}>Golfer</th>
-                          <th align="left" style={{ padding: "12px 14px" }}>Score</th>
-                          <th align="left" style={{ padding: "12px 14px" }}>Hole</th>
-                          <th align="left" style={{ padding: "12px 14px" }}>Position</th>
-                          <th align="left" style={{ padding: "12px 14px" }}>In</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedEntry.pickDetails.map((item) => {
-                          const golfer = item.golfer;
-                          const counted = selectedEntry.countedPicks.some((countedPick) => countedPick.pick === item.pick);
-                          const dropped = selectedEntry.droppedPicks.some((droppedPick) => droppedPick.pick === item.pick);
-                          const isActive = golfer && golfer.thru && golfer.thru !== "-" && golfer.thru !== "F" && !String(golfer.thru).includes(":");
-                          return (
-                            <tr
-                              key={item.pick}
-                              style={{
-                                borderTop: "1px solid #f3f4f6",
-                                background: !golfer ? "#fff7ed" : isActive ? "#f0fdf4" : "white",
-                              }}
-                            >
-                              <td style={{ padding: "14px" }}>
-                                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                                  <span style={{ fontWeight: 800 }}>{item.pick}</span>
-                                  {isActive && (
-                                    <span style={{ background: "#dcfce7", color: "#166534", padding: "3px 8px", borderRadius: 999, fontSize: 12, fontWeight: 700 }}>
-                                      Live
-                                    </span>
-                                  )}
-                                  {counted && <span style={{ background: "#ecfdf5", color: "#166534", padding: "3px 8px", borderRadius: 999, fontSize: 12, fontWeight: 700 }}>Counts</span>}
-                                  {dropped && <span style={{ background: "#f3f4f6", color: "#374151", padding: "3px 8px", borderRadius: 999, fontSize: 12, fontWeight: 700 }}>Dropped</span>}
-                                  {item.penalty && <span style={{ background: "#fff7ed", color: "#9a3412", padding: "3px 8px", borderRadius: 999, fontSize: 12, fontWeight: 700 }}>Penalty</span>}
+                  <div style={{ marginTop: 18, display: "grid", gap: 10 }}>
+                    {selectedEntry.pickDetails.map((item) => {
+                      const golfer = item.golfer;
+                      const counted = selectedEntry.countedPicks.some((countedPick) => countedPick.pick === item.pick);
+                      const dropped = selectedEntry.droppedPicks.some((droppedPick) => droppedPick.pick === item.pick);
+                      const isActive = golfer && golfer.thru && golfer.thru !== "-" && golfer.thru !== "F" && !String(golfer.thru).includes(":");
+                      return (
+                        <div
+                          key={item.pick}
+                          style={{
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 18,
+                            padding: 14,
+                            background: !golfer ? "#fff7ed" : isActive ? "#f0fdf4" : "white",
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                                <span style={{ fontWeight: 800, fontSize: 18 }}>{item.pick}</span>
+                                {isActive && <span style={{ background: "#dcfce7", color: "#166534", padding: "3px 8px", borderRadius: 999, fontSize: 12, fontWeight: 700 }}>Live</span>}
+                                {counted && <span style={{ background: "#ecfdf5", color: "#166534", padding: "3px 8px", borderRadius: 999, fontSize: 12, fontWeight: 700 }}>Counts</span>}
+                                {dropped && <span style={{ background: "#f3f4f6", color: "#374151", padding: "3px 8px", borderRadius: 999, fontSize: 12, fontWeight: 700 }}>Dropped</span>}
+                                {item.penalty && <span style={{ background: "#fff7ed", color: "#9a3412", padding: "3px 8px", borderRadius: 999, fontSize: 12, fontWeight: 700 }}>Penalty</span>}
+                              </div>
+                              <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+                                <div style={{ background: "#f9fafb", borderRadius: 12, padding: 10 }}>
+                                  <div style={{ fontSize: 11, color: "#6b7280", textTransform: "uppercase", fontWeight: 700 }}>Score</div>
+                                  <div style={{ marginTop: 4, fontSize: 22, fontWeight: 800, color: golfer ? getScoreColor(item.value ?? 0) : "#9a3412" }}>
+                                    {golfer ? `${item.label} ${getMovement(golfer)}` : "--"}
+                                  </div>
                                 </div>
-                              </td>
-                              <td style={{ padding: "14px", fontSize: 22, fontWeight: 800, color: golfer ? getScoreColor(item.value ?? 0) : "#9a3412" }}>
-                                {golfer ? `${item.label} ${getMovement(golfer)}` : "--"}
-                              </td>
-                              <td style={{ padding: "14px", fontWeight: 800, color: isActive ? "#166534" : "#111827" }}>
-                                {golfer ? getHoleLabel(golfer.thru) : "-"}
-                              </td>
-                              <td style={{ padding: "14px", fontWeight: 700 }}>
-                                {golfer ? golfer.pos || "-" : "-"}
-                              </td>
-                              <td style={{ padding: "14px", fontWeight: 900, fontSize: 18, color: counted ? "#166534" : "#9ca3af" }}>
-                                {counted ? "" : "X"}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                                <div style={{ background: "#f9fafb", borderRadius: 12, padding: 10 }}>
+                                  <div style={{ fontSize: 11, color: "#6b7280", textTransform: "uppercase", fontWeight: 700 }}>Hole</div>
+                                  <div style={{ marginTop: 4, fontSize: 20, fontWeight: 800, color: isActive ? "#166534" : "#111827" }}>
+                                    {golfer ? getHoleLabel(golfer.thru) : "-"}
+                                  </div>
+                                </div>
+                                <div style={{ background: "#f9fafb", borderRadius: 12, padding: 10 }}>
+                                  <div style={{ fontSize: 11, color: "#6b7280", textTransform: "uppercase", fontWeight: 700 }}>Pos</div>
+                                  <div style={{ marginTop: 4, fontSize: 20, fontWeight: 800 }}>
+                                    {golfer ? golfer.pos || "-" : "-"}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ fontWeight: 900, fontSize: 20, color: counted ? "#166534" : "#9ca3af", paddingTop: 4, minWidth: 20, textAlign: "right" }}>
+                              {counted ? "" : "X"}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -489,12 +487,12 @@ export default function Page() {
               </div>
               <div style={{ maxHeight: 520, overflowY: "auto" }}>
                 {sortedPlayers.map((p, index) => (
-                  <div key={p.name} style={{ padding: "14px 18px", borderTop: index === 0 ? "none" : "1px solid #f3f4f6", display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+                  <div key={p.name} style={{ padding: "14px 16px", borderTop: index === 0 ? "none" : "1px solid #f3f4f6", display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
                     <div>
-                      <div style={{ fontWeight: 700 }}>{p.name}</div>
-                      <div style={{ color: "#6b7280", fontSize: 13 }}>Hole {getHoleLabel(p.thru)} • {getThruLabel(p.thru)} • Pos {p.pos || "-"}</div>
+                      <div style={{ fontWeight: 700, fontSize: 16 }}>{p.name}</div>
+                      <div style={{ color: "#6b7280", fontSize: 13 }}>Hole {getHoleLabel(p.thru)} • Pos {p.pos || "-"}</div>
                     </div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: getScoreColor(p.score) }}>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: getScoreColor(p.score), whiteSpace: "nowrap" }}>
                       {formatScore(p.score)} {getMovement(p)}
                     </div>
                   </div>
