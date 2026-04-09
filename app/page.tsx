@@ -367,7 +367,6 @@ export default function Page() {
               </div>
             </div>
           </div>
-          </div>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 20, alignItems: "start" }}>
