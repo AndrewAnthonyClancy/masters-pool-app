@@ -88,7 +88,7 @@ const POOL_ENTRIES: PoolEntry[] = [
   { contestant: "Howell, Matt", picks: ["Scottie Scheffler", "Xander Schauffele", "Hideki Matsuyama", "Jacob Bridgeman", "Nicolai Hojgaard", "Rasmus Hojgaard", "Harry Hall", "Michael Brennan"] },
   { contestant: "Jicha, Ryan", picks: ["Scottie Scheffler", "Rory McIlroy", "Xander Schauffele", "Patrick Cantlay", "Sam Burns", "Wyndham Clark", "Dustin Johnson", "Danny Willett"] },
   { contestant: "Kaetzer, Will", picks: ["Jon Rahm", "Rory McIlroy", "Matt Fitzpatrick", "Justin Thomas", "Shane Lowry", "Wyndham Clark", "Ryan Gerard", "Carlos Ortiz"] },
-  { contestant: "Livieres, Oliver", picks: ["Scottie Scheffler", "Bryson DeChambeau", "Rory McIlroy", "Adam Scott", "Maverick McNealy", "Brian Harman", "Matt McCarty", "Carlos Ortiz"] },
+  { contestant: "Livieres, Oliver", picks: ["Scottie Scheffler", "Bryson DeChambeau", "Rory McIlroy", "Adam Scott", "Maverick McNealy", "Brian Harman", "Matthew McCarty", "Carlos Ortiz"] },
   { contestant: "Long, Trevor", picks: ["Scottie Scheffler", "Jon Rahm", "Xander Schauffele", "Shane Lowry", "Si Woo Kim", "Kurt Kitayama", "Ryan Gerard", "Kristoffer Reitan"] },
   { contestant: "McCarthy, Josh", picks: ["Scottie Scheffler", "Bryson DeChambeau", "Matt Fitzpatrick", "Shane Lowry", "Max Homa", "Casey Jarvis", "Keegan Bradley", "Charl Schwartzel"] },
   { contestant: "Wenske, Luke", picks: ["Scottie Scheffler", "Justin Rose", "Jordan Spieth", "Adam Scott", "Jason Day", "Dustin Johnson", "Sergio Garcia", "Bubba Watson"] },
