@@ -6,6 +6,11 @@ const LANGUAGE_CODE = "en";
 const SEASON_YEAR = "2026";
 const FORMAT = "json";
 
+/** Trial keys are strict; align with client refresh (app/page.tsx API_REFRESH_MS). */
+const CACHE_TTL_MS = 300_000;
+
+let lastSuccess = null;
+
 function normalizeName(name = "") {
   return String(name)
     .normalize("NFD")
@@ -41,7 +46,9 @@ async function fetchJson(url, apiKey) {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Sportradar returned ${res.status}: ${text}`);
+    const err = new Error(`Sportradar returned ${res.status}: ${text}`);
+    err.upstreamStatus = res.status;
+    throw err;
   }
 
   return res.json();
@@ -81,6 +88,11 @@ function mapStandingToPlayer(standing) {
 }
 
 export async function GET() {
+  const now = Date.now();
+  if (lastSuccess && now - lastSuccess.at < CACHE_TTL_MS) {
+    return NextResponse.json({ ...lastSuccess.body, fromCache: true });
+  }
+
   try {
     const apiKey = process.env.SPORTRADAR_API_KEY;
 
@@ -120,7 +132,7 @@ export async function GET() {
       .map(mapStandingToPlayer)
       .filter((p) => p.name);
 
-    return NextResponse.json({
+    const body = {
       updatedAt: new Date().toISOString(),
       source: "sportradar",
       tournament: {
@@ -129,16 +141,33 @@ export async function GET() {
       },
       status: leaderboardData?.status || null,
       players,
-    });
+    };
+    lastSuccess = { body, at: Date.now() };
+    return NextResponse.json(body);
   } catch (error) {
+    const upstreamStatus = error?.upstreamStatus;
+    const message = error instanceof Error ? error.message : "Unknown error";
+    const isRateLimited = upstreamStatus === 429 || message.includes("429");
+
+    if (isRateLimited && lastSuccess) {
+      return NextResponse.json({
+        ...lastSuccess.body,
+        stale: true,
+        rateLimited: true,
+        error:
+          "Sportradar rate limit (429). Showing last successful data until the limit resets.",
+      });
+    }
+
+    const status = isRateLimited ? 503 : 500;
     return NextResponse.json(
       {
         updatedAt: new Date().toISOString(),
         source: "error",
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: message,
         players: [],
       },
-      { status: 500 }
+      { status }
     );
   }
 }
