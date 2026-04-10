@@ -77,6 +77,17 @@ const MOCK_LEADERBOARD = [
   { name: "Nick Taylor", score: 1, thru: "11", pos: "T24" },
 ];
 
+/** Keep in sync with CACHE_TTL_MS in app/api/masters/route.js */
+const API_REFRESH_MS = 5 * 60 * 1000;
+const API_REFRESH_SEC = 5 * 60;
+
+function formatRefreshCountdown(totalSec: number) {
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (m <= 0) return `${s}s`;
+  return `${m}m ${String(s).padStart(2, "0")}s`;
+}
+
 const POOL_ENTRIES: PoolEntry[] = [
   { contestant: "Babyn, J & Lee, Rob", picks: ["Scottie Scheffler", "Rory McIlroy", "Jordan Spieth", "Jake Knapp", "Corey Conners", "Michael Kim", "Alex Noren", "Nick Taylor"] },
   { contestant: "Badders, Nolan", picks: ["Rory McIlroy", "Ludvig Aberg", "Xander Schauffele", "Justin Thomas", "Tyrrell Hatton", "Ben Griffin", "Aldrich Potgieter", "Andrew Novak"] },
@@ -168,14 +179,14 @@ export default function Page() {
   const [updatedAt, setUpdatedAt] = useState(new Date());
   const [loading, setLoading] = useState(false);
   const [lastPlayers, setLastPlayers] = useState<Player[]>([]);
-  const [secondsLeft, setSecondsLeft] = useState(30);
+  const [secondsLeft, setSecondsLeft] = useState(API_REFRESH_SEC);
   const [selectedContestant, setSelectedContestant] = useState("Clancy, Sarah");
   const [lastPoolLeaderboard, setLastPoolLeaderboard] = useState<RankedEntry[]>([]);
 
   async function load() {
     setLastPoolLeaderboard(poolLeaderboard);
     setLastPlayers(players);
-    setSecondsLeft(30);
+    setSecondsLeft(API_REFRESH_SEC);
     setLoading(true);
     try {
       if (!useMock) {
@@ -204,7 +215,7 @@ export default function Page() {
 
   useEffect(() => {
     load();
-    const id = setInterval(load, 30000);
+    const id = setInterval(load, API_REFRESH_MS);
     const countdown = setInterval(() => {
       setSecondsLeft((s) => (s > 0 ? s - 1 : 0));
     }, 1000);
@@ -354,7 +365,9 @@ export default function Page() {
             <div style={{ background: "#f9fafb", borderRadius: 18, padding: 16, border: "1px solid #e5e7eb" }}>
               <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 700, textTransform: "uppercase" }}>Updated</div>
               <div style={{ marginTop: 8, fontSize: 22, fontWeight: 800 }}>{updatedAt.toLocaleTimeString()}</div>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>Refresh in {secondsLeft}s</div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>
+                Refresh in {formatRefreshCountdown(secondsLeft)}
+              </div>
             </div>
             <div style={{ background: "#f9fafb", borderRadius: 18, padding: 16, border: "1px solid #e5e7eb" }}>
               <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 700, textTransform: "uppercase" }}>Pool Entries</div>
