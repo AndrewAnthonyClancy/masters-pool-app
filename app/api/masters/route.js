@@ -1,173 +1,162 @@
 import { NextResponse } from "next/server";
 
-const ACCESS_LEVEL = "trial";
-const GOLF_TOUR = "pga";
-const LANGUAGE_CODE = "en";
-const SEASON_YEAR = "2026";
-const FORMAT = "json";
-
-/** Trial keys are strict; align with client refresh (app/page.tsx API_REFRESH_MS). */
+const MASTERS_CONFIG_URL = "https://www.masters.com/en_US/json/gen/config_web.json";
+/** Keep in sync with API_REFRESH_MS in app/page.tsx */
 const CACHE_TTL_MS = 300_000;
 
 let lastSuccess = null;
 
-function normalizeName(name = "") {
-  return String(name)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\./g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
+function repairEncoding(value = "") {
+  const text = String(value || "");
+
+  try {
+    const repaired = Buffer.from(text, "latin1").toString("utf8");
+    return repaired.includes("\uFFFD") ? text : repaired;
+  } catch {
+    return text;
+  }
 }
 
-function looksLikeMastersTournament(tournament) {
-  const name = normalizeName(tournament?.name || "");
-  const venue = normalizeName(tournament?.venue?.name || "");
-  const location = normalizeName(
-    `${tournament?.venue?.city || ""} ${tournament?.venue?.state || ""} ${tournament?.venue?.country || ""}`
-  );
+function parseScore(value) {
+  if (value === null || value === undefined || value === "") return 0;
+  if (value === "E") return 0;
 
-  return (
-    name.includes("masters") ||
-    venue.includes("augusta national") ||
-    location.includes("augusta")
-  );
+  const score = Number(value);
+  return Number.isFinite(score) ? score : 0;
 }
 
-async function fetchJson(url, apiKey) {
+function getCurrentRoundKey(rawRound) {
+  const roundNumber = Number.parseInt(String(rawRound || "").replace(/^0+/, ""), 10);
+  return Number.isFinite(roundNumber) && roundNumber > 0 ? `round${roundNumber}` : null;
+}
+
+function getPlayerStatus(player, roundKey) {
+  const roundData = roundKey ? player?.[roundKey] : null;
+  const roundStatus = String(roundData?.roundStatus || "").toUpperCase();
+  const statusCode = String(player?.newStatus || player?.status || "").toUpperCase();
+  const thru = String(player?.thru || "").trim();
+  const teeTime = String(roundData?.teetime || player?.teetime || "").trim();
+
+  if (statusCode === "C") {
+    return { thru: "-", status: "CUT" };
+  }
+
+  if (statusCode.includes("WD")) {
+    return { thru: "-", status: "WD" };
+  }
+
+  if (thru) {
+    return { thru, status: "In progress" };
+  }
+
+  if (roundStatus === "FINISHED" || statusCode.startsWith("F")) {
+    return { thru: "F", status: "Finished" };
+  }
+
+  if (roundStatus === "PRE" && teeTime) {
+    return { thru: teeTime, status: "Tee time" };
+  }
+
+  return { thru: "-", status: "Not started" };
+}
+
+function mapPlayer(player, roundKey) {
+  const { thru, status } = getPlayerStatus(player, roundKey);
+  const fullName = repairEncoding(
+    player?.full_name || [player?.first_name, player?.last_name].filter(Boolean).join(" ").trim()
+  );
+
+  return {
+    name: fullName,
+    score: parseScore(player?.topar),
+    pos: player?.pos || "-",
+    thru,
+    status,
+    country: repairEncoding(player?.countryName || ""),
+    amateur: Boolean(player?.amateur),
+  };
+}
+
+async function fetchJson(url) {
   const res = await fetch(url, {
     cache: "no-store",
     headers: {
-      "x-api-key": apiKey,
       Accept: "application/json",
+      "User-Agent": "masters-tracker/1.0",
     },
   });
 
   if (!res.ok) {
     const text = await res.text();
-    const err = new Error(`Sportradar returned ${res.status}: ${text}`);
-    err.upstreamStatus = res.status;
-    throw err;
+    const error = new Error(`Masters returned ${res.status}: ${text}`);
+    error.upstreamStatus = res.status;
+    throw error;
   }
 
   return res.json();
 }
 
-function mapStandingToPlayer(standing) {
-  const name = `${standing.first_name || ""} ${standing.last_name || ""}`.trim();
+async function getMastersFeedUrl() {
+  const config = await fetchJson(MASTERS_CONFIG_URL);
+  const path = config?.scoringData?.liveScore?.path;
 
-  const currentRound =
-    Array.isArray(standing.rounds) && standing.rounds.length
-      ? standing.rounds.find((r) => (r?.thru || 0) > 0) || standing.rounds[0]
-      : null;
-
-  let thru = "-";
-  if (currentRound?.thru === 18) {
-    thru = "F";
-  } else if ((currentRound?.thru || 0) > 0) {
-    thru = String(currentRound.thru);
+  if (!path) {
+    throw new Error("Masters config did not include a live score feed path");
   }
 
-  let status = "Not started";
-  if (thru === "F") status = "Finished";
-  else if (thru !== "-") status = "In progress";
+  return new URL(path, "https://www.masters.com").toString();
+}
+
+async function getLivePayload() {
+  const feedUrl = await getMastersFeedUrl();
+  const feed = await fetchJson(feedUrl);
+  const data = feed?.data || {};
+  const roundKey = getCurrentRoundKey(data?.currentRound);
+  const players = Array.isArray(data?.player)
+    ? data.player.map((player) => mapPlayer(player, roundKey)).filter((player) => player.name)
+    : [];
 
   return {
-    name,
-    score: typeof standing.score === "number" ? standing.score : 0,
-    pos:
-      typeof standing.position === "number"
-        ? `${standing.tied ? "T" : ""}${standing.position}`
-        : "-",
-    thru,
-    status,
-    country: standing.country || "",
-    amateur: Boolean(standing.amateur),
+    updatedAt: new Date().toISOString(),
+    source: "masters.com",
+    tournament: {
+      name: "Masters Tournament",
+      year: String(new Date().getFullYear()),
+    },
+    status: data?.statusRound || null,
+    currentRound: roundKey,
+    players,
   };
 }
 
 export async function GET() {
   const now = Date.now();
+
   if (lastSuccess && now - lastSuccess.at < CACHE_TTL_MS) {
     return NextResponse.json({ ...lastSuccess.body, fromCache: true });
   }
 
   try {
-    const apiKey = process.env.SPORTRADAR_API_KEY;
-
-    if (!apiKey) {
-      throw new Error("Missing SPORTRADAR_API_KEY in .env.local");
-    }
-
-    const scheduleUrl =
-      `https://api.sportradar.com/golf/${ACCESS_LEVEL}/${GOLF_TOUR}/v3/` +
-      `${LANGUAGE_CODE}/${SEASON_YEAR}/tournaments/schedule.${FORMAT}`;
-
-    const scheduleData = await fetchJson(scheduleUrl, apiKey);
-
-    const tournaments = Array.isArray(scheduleData?.tournaments)
-      ? scheduleData.tournaments
-      : Array.isArray(scheduleData)
-      ? scheduleData
-      : [];
-
-    const masters = tournaments.find(looksLikeMastersTournament);
-
-    if (!masters?.id) {
-      throw new Error("Could not find Masters tournament in Sportradar schedule");
-    }
-
-    const leaderboardUrl =
-      `https://api.sportradar.com/golf/${ACCESS_LEVEL}/${GOLF_TOUR}/v3/` +
-      `${LANGUAGE_CODE}/${SEASON_YEAR}/tournaments/${masters.id}/leaderboard.${FORMAT}`;
-
-    const leaderboardData = await fetchJson(leaderboardUrl, apiKey);
-
-    const standings = Array.isArray(leaderboardData?.leaderboard)
-      ? leaderboardData.leaderboard
-      : [];
-
-    const players = standings
-      .map(mapStandingToPlayer)
-      .filter((p) => p.name);
-
-    const body = {
-      updatedAt: new Date().toISOString(),
-      source: "sportradar",
-      tournament: {
-        id: masters.id,
-        name: masters.name || "Masters Tournament",
-      },
-      status: leaderboardData?.status || null,
-      players,
-    };
+    const body = await getLivePayload();
     lastSuccess = { body, at: Date.now() };
     return NextResponse.json(body);
   } catch (error) {
-    const upstreamStatus = error?.upstreamStatus;
-    const message = error instanceof Error ? error.message : "Unknown error";
-    const isRateLimited = upstreamStatus === 429 || message.includes("429");
-
-    if (isRateLimited && lastSuccess) {
+    if (lastSuccess) {
       return NextResponse.json({
         ...lastSuccess.body,
         stale: true,
-        rateLimited: true,
-        error:
-          "Sportradar rate limit (429). Showing last successful data until the limit resets.",
+        error: error instanceof Error ? error.message : "Unknown error",
       });
     }
 
-    const status = isRateLimited ? 503 : 500;
     return NextResponse.json(
       {
         updatedAt: new Date().toISOString(),
-        source: "error",
-        error: message,
+        source: "masters.com",
+        error: error instanceof Error ? error.message : "Unknown error",
         players: [],
       },
-      { status }
+      { status: 500 }
     );
   }
 }

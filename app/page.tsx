@@ -41,6 +41,15 @@ type RankedEntry = PoolEntry & {
   place: number;
 };
 
+type MastersApiResponse = {
+  updatedAt?: string;
+  source?: string;
+  error?: string;
+  players?: Player[];
+};
+
+const REFRESH_INTERVAL_MS = 30_000;
+
 const MOCK_LEADERBOARD = [
   { name: "Scottie Scheffler", score: -4, thru: "12", pos: "T3" },
   { name: "Rory McIlroy", score: -2, thru: "10", pos: "T9" },
@@ -163,8 +172,20 @@ function getPoolScoreInfo(golfer?: Player) {
   };
 }
 
+function repairText(value: string = "") {
+  const text = String(value || "");
+
+  try {
+    const bytes = Uint8Array.from(Array.from(text), (char) => char.charCodeAt(0) & 0xff);
+    const repaired = new TextDecoder().decode(bytes);
+    return repaired.includes("\uFFFD") ? text : repaired;
+  } catch {
+    return text;
+  }
+}
+
 function normalizeName(name: string = "") {
-  return String(name || "")
+  return repairText(String(name || ""))
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\./g, "")
@@ -176,7 +197,9 @@ function normalizeName(name: string = "") {
 export default function Page() {
   const [players, setPlayers] = useState<Player[]>(MOCK_LEADERBOARD);
   const [useMock, setUseMock] = useState(false);
-  const [updatedAt, setUpdatedAt] = useState(new Date());
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const [dataSource, setDataSource] = useState("masters.com");
+  const [apiError, setApiError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [lastPlayers, setLastPlayers] = useState<Player[]>([]);
   const [secondsLeft, setSecondsLeft] = useState(API_REFRESH_SEC);
@@ -188,29 +211,48 @@ export default function Page() {
     setLastPlayers(players);
     setSecondsLeft(API_REFRESH_SEC);
     setLoading(true);
-    try {
-      if (!useMock) {
-        const res = await fetch("/api/masters", { cache: "no-store" });
-        const data = await res.json();
-        if (Array.isArray(data.players) && data.players.length > 0) {
-          setPlayers(data.players);
-          setUpdatedAt(new Date());
-          setLoading(false);
-          return;
-        }
-      }
-    } catch (e) {
-      console.log("API failed, using mock");
-    }
 
-    setPlayers((p: Player[]) =>
-      p.map((pl: Player) => ({
+    if (useMock) {
+      setApiError(null);
+      setDataSource("mock");
+      setPlayers(MOCK_LEADERBOARD.map((pl: Player) => ({
         ...pl,
         score: pl.score + (Math.random() > 0.9 ? 1 : Math.random() > 0.9 ? -1 : 0),
-      }))
-    );
-    setUpdatedAt(new Date());
-    setLoading(false);
+      })));
+      setUpdatedAt(new Date());
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/masters", { cache: "no-store" });
+      const data: MastersApiResponse = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Live Masters feed request failed");
+      }
+
+      if (Array.isArray(data.players) && data.players.length > 0) {
+        setPlayers(
+          data.players.map((player) => ({
+            ...player,
+            name: repairText(player.name),
+            country: player.country ? repairText(player.country) : player.country,
+          }))
+        );
+        setUpdatedAt(data.updatedAt ? new Date(data.updatedAt) : new Date());
+        setDataSource(data.source || "masters.com");
+        setApiError(data.error || null);
+        setLoading(false);
+        return;
+      }
+
+      throw new Error(data.error || "Live Masters feed returned no players");
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : "Live Masters feed failed");
+      setDataSource("masters.com");
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -231,8 +273,8 @@ export default function Page() {
   function getMovement(player: Player) {
     const prev = lastPlayers.find((p: Player) => p.name === player.name);
     if (!prev) return "";
-    if (player.score < prev.score) return "↑";
-    if (player.score > prev.score) return "↓";
+    if (player.score < prev.score) return "^";
+    if (player.score > prev.score) return "v";
     return "";
   }
 
@@ -293,8 +335,8 @@ export default function Page() {
   function getStandingMovement(entry: RankedEntry) {
     const prev = lastPoolLeaderboard.find((p: RankedEntry) => p.contestant === entry.contestant);
     if (!prev) return "";
-    if (entry.place < prev.place) return "↑";
-    if (entry.place > prev.place) return "↓";
+    if (entry.place < prev.place) return "^";
+    if (entry.place > prev.place) return "v";
     return "";
   }
 
@@ -339,6 +381,11 @@ export default function Page() {
               <p style={{ margin: "8px 0 0", color: "#6b7280", fontSize: 14 }}>
                 Rules: best 6 of 8 scores count. Worst 2 are dropped. Missed cut or WD counts as +8 for each weekend round (+16 total).
               </p>
+              {!useMock && apiError ? (
+                <p style={{ margin: "8px 0 0", color: "#b45309", fontSize: 14 }}>
+                  Live feed warning: {apiError}
+                </p>
+              ) : null}
             </div>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -352,19 +399,23 @@ export default function Page() {
                 onClick={() => setUseMock((v) => !v)}
                 style={{ border: "1px solid #d1d5db", background: "white", color: "#111827", padding: "12px 16px", borderRadius: 12, fontWeight: 700, cursor: "pointer" }}
               >
-                {useMock ? "Using Mock Data" : "Using Live API"}
+                {useMock ? "Using Mock Data" : "Using masters.com"}
               </button>
             </div>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginTop: 20 }}>
             <div style={{ background: "#f9fafb", borderRadius: 18, padding: 16, border: "1px solid #e5e7eb" }}>
-              <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 700, textTransform: "uppercase" }}>Mode</div>
-              <div style={{ marginTop: 8, fontSize: 22, fontWeight: 800 }}>{useMock ? "Mock" : "Live"}</div>
+              <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 700, textTransform: "uppercase" }}>Source</div>
+              <div style={{ marginTop: 8, fontSize: 22, fontWeight: 800 }}>{useMock ? "Mock" : dataSource}</div>
             </div>
             <div style={{ background: "#f9fafb", borderRadius: 18, padding: 16, border: "1px solid #e5e7eb" }}>
               <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 700, textTransform: "uppercase" }}>Updated</div>
               <div style={{ marginTop: 8, fontSize: 22, fontWeight: 800 }}>{updatedAt.toLocaleTimeString()}</div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>
+                Refresh in {formatRefreshCountdown(secondsLeft)}
+              </div>
+              <div style={{ marginTop: 8, fontSize: 22, fontWeight: 800 }}>{updatedAt ? updatedAt.toLocaleTimeString() : "-"}</div>
               <div style={{ fontSize: 12, color: "#6b7280" }}>
                 Refresh in {formatRefreshCountdown(secondsLeft)}
               </div>
@@ -376,7 +427,7 @@ export default function Page() {
             <div style={{ background: "#f9fafb", borderRadius: 18, padding: 16, border: "1px solid #e5e7eb" }}>
               <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 700, textTransform: "uppercase" }}>Current Pool Leader</div>
               <div style={{ marginTop: 8, fontSize: 22, fontWeight: 800 }}>
-                {poolLeaderboard[0] ? `${poolLeaderboard[0].contestant} • ${formatScore(poolLeaderboard[0].total)}` : "-"}
+                {poolLeaderboard[0] ? `${poolLeaderboard[0].contestant} | ${formatScore(poolLeaderboard[0].total)}` : "-"}
               </div>
             </div>
           </div>
@@ -423,10 +474,10 @@ export default function Page() {
                   <div style={{ fontSize: 24, fontWeight: 800 }}>{selectedEntry.contestant}</div>
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
                     <span style={{ background: "#ecfdf5", color: "#166534", padding: "8px 12px", borderRadius: 999, fontWeight: 700 }}>
-                      Counting 6 • {formatScore(selectedEntry.total)}
+                      Counting 6 | {formatScore(selectedEntry.total)}
                     </span>
                     <span style={{ background: "#f3f4f6", color: "#374151", padding: "8px 12px", borderRadius: 999, fontWeight: 700 }}>
-                      Dropped 2 • {selectedEntry.droppedPicks.length}
+                      Dropped 2 | {selectedEntry.droppedPicks.length}
                     </span>
                     <span style={{ background: "#fff7ed", color: "#9a3412", padding: "8px 12px", borderRadius: 999, fontWeight: 700 }}>
                       Penalties {selectedEntry.penaltyCount}
@@ -503,7 +554,7 @@ export default function Page() {
                   <div key={p.name} style={{ padding: "14px 16px", borderTop: index === 0 ? "none" : "1px solid #f3f4f6", display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 16 }}>{p.name}</div>
-                      <div style={{ color: "#6b7280", fontSize: 13 }}>Hole {getHoleLabel(p.thru)} • Pos {p.pos || "-"}</div>
+                      <div style={{ color: "#6b7280", fontSize: 13 }}>Hole {getHoleLabel(p.thru)} | Pos {p.pos || "-"}</div>
                     </div>
                     <div style={{ fontSize: 20, fontWeight: 800, color: getScoreColor(p.score), whiteSpace: "nowrap" }}>
                       {formatScore(p.score)} {getMovement(p)}
