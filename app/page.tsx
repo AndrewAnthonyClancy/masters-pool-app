@@ -411,7 +411,7 @@ export default function Page() {
             </div>
             <div style={{ background: "#f9fafb", borderRadius: 18, padding: 16, border: "1px solid #e5e7eb" }}>
               <div style={{ fontSize: 12, color: "#6b7280", fontWeight: 700, textTransform: "uppercase" }}>Updated</div>
-              <div style={{ marginTop: 8, fontSize: 22, fontWeight: 800 }}>{updatedAt.toLocaleTimeString()}</div>
+              <div style={{ marginTop: 8, fontSize: 22, fontWeight: 800 }}>{updatedAt ? updatedAt.toLocaleTimeString() : "-"}</div>
               <div style={{ fontSize: 12, color: "#6b7280" }}>
                 Refresh in {formatRefreshCountdown(secondsLeft)}
               </div>
